@@ -129,6 +129,8 @@ int16_t getTarget();
 bool tick();
 ```
 
+`res` sets the value range used by the library, but does not configure the hardware resolution of `analogWrite`. Configure it separately with the platform API. Standard Arduino AVR uses 8-bit `analogWrite`, so keep `res = 8`.
+
 ### Description of the fit
 #### Launch and stop
 - `runSpeed`starts the motor at the specified speed, maintains negative values for rotation in the opposite direction. meaning`0`switch off

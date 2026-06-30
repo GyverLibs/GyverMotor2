@@ -14,6 +14,8 @@ enum class GM2 : uint8_t {
 template <GM2 driver, uint8_t res = 8>
 class GyverMotor2 {
    public:
+    static_assert(res > 0 && res <= 15, "res must be 1..15");
+
     // инициализация с указанием типа драйвера, разрешения ШИМ (бит) и пинов
     GyverMotor2(uint8_t pinA, uint8_t pinB = 0xff, uint8_t pinC = 0xff) : _pinA(pinA), _pinB(pinB), _pinC(pinC) {
         pinMode(_pinA, OUTPUT);
@@ -34,8 +36,13 @@ class GyverMotor2 {
 
     // установить реверс направления (умолч. false)
     void setReverse(bool rev) {
+        if (_rev == rev) return;
+        if (_deadtime && _speed) {
+            _setAll(0);
+            delayMicroseconds(_deadtime);
+        }
         _rev = rev;
-        _run(_speed);
+        if (_speed) _run(_speed);
     }
 
     // получить реверс направления
@@ -46,12 +53,12 @@ class GyverMotor2 {
     // установить минимальный ШИМ (умолч. 0)
     void setMinDuty(uint16_t duty) {
         _minDuty = (duty > _maxDuty) ? _maxDuty : duty;
-        _run(_speed);
+        if (_speed) _run(_speed);
     }
 
     // установить минимальный ШИМ в % от максимального (умолч. 0)
     void setMinDutyPerc(uint8_t perc) {
-        setMinDuty(_perc(perc));
+        setMinDuty(_perc(constrain(perc, 0, 100)));
     }
 
     // получить минимальный ШИМ
@@ -77,7 +84,7 @@ class GyverMotor2 {
 
     // установить скорость в % от максимального ШИМ (-100.. 100%)
     void runSpeedPerc(int8_t perc) {
-        runSpeed(_perc(perc));
+        runSpeed(_perc(constrain(perc, -100, 100)));
     }
 
     // получить текущую скорость мотора в ШИМ
@@ -126,7 +133,7 @@ class GyverMotor2 {
 
     // установить ускорение в процентах в секунду. 0 чтобы отключить
     void setAccelPerc(uint8_t perc) {
-        setAccel(_perc(perc));
+        setAccel(_perc(constrain(perc, 0, 100)));
     }
 
     // получить период, не реже которого нужно вызывать tick, мс
@@ -152,8 +159,8 @@ class GyverMotor2 {
 #ifndef GMOTOR2_NO_ACCEL
         if (_ds && (_speed != _target) && (uint8_t(uint8_t(millis()) - _tmr) >= _prd)) {
             _tmr = millis();
-            int16_t err = _target - _speed;
-            _run(_speed + constrain(err, -_ds, _ds));
+            int32_t err = int32_t(_target) - _speed;
+            _run(_speed + constrain(err, -int32_t(_ds), int32_t(_ds)));
             return _speed == _target;
         }
 #endif
@@ -176,7 +183,7 @@ class GyverMotor2 {
 
         bool dir = (duty > 0) ^ _rev;
         if (duty < 0) duty = -duty;
-        if (_minDuty) duty = ((int32_t(duty) * (_maxDuty - _minDuty) + (1 << res) - 1) >> res) + _minDuty;
+        if (_minDuty) duty = ((int32_t(duty) * (_maxDuty - _minDuty) + (uint32_t(1) << res) - 1) >> res) + _minDuty;
 
 #ifdef __AVR__
         if (res > 8 && duty == 255) ++duty;  // защита от 255 при разрешении > 8 бит
@@ -260,6 +267,6 @@ class GyverMotor2 {
 #endif
     bool _rev = 0;
 
-    static constexpr int16_t _maxDuty = (1 << res) - 1;
-    static constexpr int16_t _perc(int8_t perc) { return int32_t(_maxDuty) * perc / 100; }
+    static constexpr int16_t _maxDuty = (uint32_t(1) << res) - 1;
+    static constexpr int16_t _perc(int16_t perc) { return int32_t(_maxDuty) * perc / 100; }
 };
